@@ -36,7 +36,6 @@ show_help() {
 
 ###############################################################################
 
-# implementa help para el instalador que se llama con el comando -h o --help, la ayuda debe estar en inglés
 if [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ $# -eq 0 ]; then
     show_help
 fi
