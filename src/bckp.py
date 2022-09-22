@@ -97,6 +97,7 @@ def create_backup_dir(path_file, id):
 def create_backup(append, alias):
     alias_dir = '/etc/backup/' + alias
     aliasConf = alias_dir + '/.bk.data'
+    file = path_of_alias(alias)
 
     backConf = ConfigParser()
     backConf.optionxform = lambda x: x
@@ -165,7 +166,7 @@ if getuser() == 'root':
     str_name    = 'name of the backup'
 
     str_remove  = 'removes the original file when backup is created'
-    
+
     str_clear   = 'removes all backups'
 
     parser = ArgumentParser(description = 'This command create, update a backup for a file')
@@ -198,23 +199,5 @@ if getuser() == 'root':
     args = parser.parse_args()
     args.func(args)
 
-    '''
-    elif len(args.file) > 0:
-        for n in range(len(args.file)):
-            file = args.file[n]
-            if file[-1] == '/':
-                file = file[:-1]
-            path_file = os.path.abspath(file)
-
-            if not (path_file in conf['PATHS'].keys()):
-                create_backup_dir(path_file, conf['CONFIG']['namespace'])
-
-            create_backup(args.append, alias_of_path(path_file))
-
-            else:
-                print('bckp: cannot stat ' + file + ': No such file or directory')
-    else:
-        print('bckp: missing file operand')
-'''
 else:
     print('bckp: cannot create backup for the file: Permission denied')
