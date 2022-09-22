@@ -18,10 +18,17 @@ bckp() {
         echo "bckp already installed"
         return 0
     fi
+    uuid=$(cat /proc/sys/kernel/random/uuid) 
+    echo "$uuid"
     echo "Installing bckp command"
     chmod +x src/bckp.py
     cp src/bckp.py /usr/bin/bckp
     mkdir -p /etc/backup/
+    touch /etc/backup/.bckp.conf
+    echo [BACKUPS] >> /etc/backup/.bckp.conf
+    echo [PATHS] >> /etc/backup/.bckp.conf
+    echo [CONFIG] >> /etc/backup/.bckp.conf
+    echo namespace = $uuid >> /etc/backup/.bckp.conf
     return 1
 }
 
@@ -62,6 +69,6 @@ if [ "$(id -u)" = "0" ]; then
         echo "Error: invalid parameters"
     fi
 else
-    echo "This script must be run as root" 1>&2
+    echo "This script must be run as sudo" 1>&2
 fi
 

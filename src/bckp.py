@@ -4,205 +4,217 @@ from getpass import getuser
 from pwd import getpwuid
 from grp import getgrgid
 from sys import exit
-import argparse
+from configparser import ConfigParser
+from argparse import ArgumentParser
+import uuid
 import os
 import time
 
-#############################################################################################################
+###############################################################################
+#                                    UTILS                                    #
+###############################################################################
 
-def get_bup_info(file):
-    file = file if call('[ ! -f ' + file + ' ]', shell = True) else file+'/.bk.data'
-    with open(file, 'r') as f:
-        f.seek(51)
-        path = f.readline()[9:-1]
-        mod = f.readline()[9:-1]
-        own = f.readline()[9:-1]
-        grp = f.readline()[9:-1]
-        mdt = f.readline()[9:-1]
-        f.seek(f.tell() + 51, os.SEEK_SET)
-        content = f.read()
-    return path, mod, own, grp, mdt, content
-
-def file_name(file, append):
-    max = '-1'
-    # si file es una ruta obten la ultima parte de la ruta
-    if '/' in file:
-        file = file.split('/')[-1]
-    print(max)
-    if append:
-        with os.scandir('/etc/backup/') as dir:
-            for files in dir:
-                if files.name[:len(file)] == file:
-                    print(files.name)
-                    actual = files.name[len(file)+4:]
-                    print('actual: ' + actual)
-                    max = actual if int(actual) > int(max) else max
-                    print('max: ' + max)
-
-    max = str(int(max) + 1)
-    print('maxfin: ' + max)
-    return '/etc/backup/' + file + '~bk_' + max
-
-def create_f_backup(file, append):
-    dest = file_name(file, append)
-    call('touch ' + dest, shell = True)
-    with open(dest, 'w') as f:
-        f.write('##################################################\n')
-        f.write('# path:  ' + os.path.abspath(file) + '\n')
-        f.write('# mode:  ' + oct(os.stat(file).st_mode)[-3:] + '\n')
-        f.write('# owner: ' + getpwuid(os.stat(file).st_uid).pw_name + '\n')
-        f.write('# group: ' + getgrgid(os.stat(file).st_gid).gr_name + '\n')
-        f.write('# date:  ' + time.ctime() + '\n')
-        f.write('##################################################\n')
-        with open(file, 'r') as src:
-            content = src.read()
-            f.write(content)
-    call('chmod 444 ' + dest, shell = True)
-
-def create_d_backup(file, append):
-    dest = file_name(file, append)
-    conf = dest + '/.bk.data'
-    call('cp -r ' + file + ' ' + dest, shell = True)
-    call('cd ' + dest, shell = True)
-    call('touch ' + conf, shell = True)
-    with open(conf, 'w') as f:
-        f.write('##################################################\n')
-        f.write('# path:  ' + os.path.abspath(file) + '\n')
-        f.write('# mode:  ' + oct(os.stat(file).st_mode)[-3:] + '\n')
-        f.write('# owner: ' + getpwuid(os.stat(file).st_uid).pw_name + '\n')
-        f.write('# group: ' + getgrgid(os.stat(file).st_gid).gr_name + '\n')
-        f.write('# date:  ' + time.ctime() + '\n')
-        f.write('##################################################\n')
-    call('chmod -R 444 ' + dest, shell = True)
-
-def restore_f_backup(file):
-    file = '/etc/backup/' + file
-    path, mod, own, grp, mdt, content = get_bup_info(file)
-
-    if exist_file(path, 0):
-        call('rm ' + path, shell = True)
-    call('touch ' + path,  shell = True)
-    call('chmod ' + mod + ' ' + path, shell = True)
-    call('chown ' + own + ' ' + path, shell = True)
-    call('chgrp ' + grp + ' ' + path, shell = True)
-    with open(path, 'w') as f:
-        f.write(content)
-
-def restore_d_backup(file):
-    file = '/etc/backup/' + file
-    path, mod, own, grp, mdt, content = get_bup_info(file)
-
-    call('rm -r ' + path, shell = True)
-    call('cp -r ' + file + ' ' + path,  shell = True)
-    call('chmod ' + mod + ' ' + path, shell = True)
-    call('chown ' + own + ' ' + path, shell = True)
-    call('chgrp ' + grp + ' ' + path, shell = True)
-    call('rm ' + path + '/.bk.data', shell = True)
-
-
-def end_info(n):
-    return u'  \u2514 ' if n == 0 else u'  \u251c '
-
-def list_backups(flags):
-    with os.scandir('/etc/backup/') as dir:
-        for file in dir:
-            path, mod, own, grp, mdt, content = get_bup_info(file.path)
-            print('* ' + file.name + ':')
-            if flags != [1,0,0,0,0]:
-                total = 2*flags[2] + 2*flags[3] + flags[4] if flags[1] == 0 else 5
-                #print(' |')
-            if flags[1] or flags[2]:
-                total -= 2;
-                print(u'  \u251c Path: '  + path)
-                print(end_info(total) + 'Mode: '  + mod)
-            if flags[1] or flags[4]:
-                total -= 1
-                print(end_info(total) + 'Date: '  + mdt)
-            if flags[1] or flags[3]:
-                total -= 2
-                print(u'  \u251c Owner: ' + own)
-                print(end_info(total) + 'Group: ' + grp)
-            print()
-
-def exist_file(file, restore):
-    if restore:
-        file = '/etc/backup/' + file
+def exist_file(file):
     return call('[ ! -f ' + file + ' ]', shell = True)
 
-def exist_dir(file, restore):
-    if restore:
-        file = '/etc/backup/' + file
+def exist_dir(file):
     return call('[ ! -d ' + file + ' ]', shell = True)
 
-#############################################################################################################
+def exist(file):
+    return exist_dir(file) or exist_file(file)
+
+def alias_of_path(file):
+    conf.read(confFile)
+    for opcion, valor in conf['PATHS'].items():
+        if opcion == file:
+            return valor
+    return False
+
+def path_of_alias(alias):
+    conf.read(confFile)
+    for opcion, valor in conf['PATHS'].items():
+        if valor == alias:
+            return opcion
+    return False
+
+def getLastVersion(file):
+    bckpConf = ConfigParser()
+    bckpConf.read(file)
+    max = -1
+    for section in bckpConf.sections():
+        if section != 'DEFAULT':
+            max = int(section) if int(section) > max else max
+    return max
+
+###############################################################################
+#                                 LIST BACKUP                                 #
+###############################################################################
+
+def list_backup(args):
+    print(args)
+    print('list_info' + str(args.list_info))
+
+###############################################################################
+#                                 ADD  BACKUP                                 #
+###############################################################################
+    
+def add_backup(args):
+    for n in range(len(args.file)):
+        file = args.file[n]
+
+        if exist(file):
+            file = file[:-1] if file[-1] == '/' else file
+            path_file = os.path.abspath(file)
+
+            if not (path_file in conf['PATHS'].keys()):
+                create_backup_dir(path_file, conf['CONFIG']['namespace'])
+
+            create_backup(args.append, alias_of_path(path_file))
+        else:
+            print('bckp: cannot stat ' + file + ': No such file or directory')
+
+def create_backup_dir(path_file, id):
+    alias = alias_of_path(path_file) if alias_of_path(path_file) is not False else str(uuid.uuid5(uuid.UUID(id), path_file))
+    alias_dir = '/etc/backup/' + alias
+    aliasConf = alias_dir + '/.bk.data'
+
+    backConf = ConfigParser()
+    backConf.optionxform = lambda x: x
+    backConf.read(aliasConf)
+
+    global conf
+    global confFile
+
+    conf['PATHS'] = {path_file : alias}
+    with open(confFile, 'w') as f:
+        conf.write(f)
+
+    call('mkdir ' + alias_dir, shell = True)
+    call('touch ' + aliasConf, shell = True)
+    backConf['DEFAULT']={}
+    backConf['DEFAULT']['path'] = path_file
+
+def create_backup(append, alias):
+    alias_dir = '/etc/backup/' + alias
+    aliasConf = alias_dir + '/.bk.data'
+
+    backConf = ConfigParser()
+    backConf.optionxform = lambda x: x
+    backConf.read(aliasConf)
+    actualVersion = '0'        
+    
+    if append:
+        actualVersion = str(getLastVersion(aliasConf) + 1)
+    else:
+        backConf.sections().clear()
+
+    backConf[actualVersion]={}
+    backConf[actualVersion]['mode'] = oct(os.stat(file).st_mode)[-3:]
+    backConf[actualVersion]['owner'] = getpwuid(os.stat(file).st_uid).pw_name
+    backConf[actualVersion]['group'] = getgrgid(os.stat(file).st_gid).gr_name
+    backConf[actualVersion]['date'] = time.ctime()
+
+    with open(aliasConf, 'w') as f:
+        backConf.write(f)
+
+    call('chmod -R 644 ' + alias_dir, shell = True)
+
+###############################################################################
+#                               RESTORE  BACKUP                               #
+###############################################################################
+
+def restore_backup(args):
+    return
+
+###############################################################################
+#                                CLEAR  BACKUP                                #
+###############################################################################
+
+def clear_backups(args):
+    call("find /etc/backup/* -not -name '.bckp.conf' -exec rm -rdf {} +", shell = True)
+
+###############################################################################
+#                                REMOVE BACKUP                                #
+###############################################################################
+
+def remove_backup(args):
+    return
+
+###############################################################################
 
 if getuser() == 'root':
 
-    str_list    = 'list all backups created'
-    str_restore = 'restores the backup'
-    str_remove  = 'removes the original file when backup is created'
+    conf = ConfigParser()
+    conf.optionxform = lambda x: x
+    confFile = '/etc/backup/.bckp.conf'
+    conf.read(confFile)
+
+    str_list        = 'list the backups and information about them'
+    str_list_info   = 'list all information about the backups'
+    str_list_owner  = 'list the owner of the backups'
+    str_list_time   = 'list the time of the backups'
+    str_list_mode   = 'list the mode of the backups'
+    str_list_path   = 'list the path of the backups'
+
+    str_add     = 'add a new backup'
     str_append  = 'if the backup already exists, a new one will be created instead of replacing the existing one'
+    str_message = 'message to identify the backup'
     str_file    = 'file we want to make a backup'
-    str_dir     = 'create a backup for a directory'
+
+    str_restore = 'restores the backup'
+    str_name    = 'name of the backup'
+
+    str_remove  = 'removes the original file when backup is created'
+    
     str_clear   = 'removes all backups'
 
-    parser = argparse.ArgumentParser(description = 'This command create, update a backup for a file')
+    parser = ArgumentParser(description = 'This command create, update a backup for a file')
+    subparsers = parser.add_subparsers(help='sub-command help')
 
-    parser.add_argument('-l',  '--list',       help = str_list,    action = 'store_true')
-    parser.add_argument('-a',  '--list_info',  help = str_list,    action = 'store_true')
-    parser.add_argument('-p',  '--list_path',  help = str_list,    action = 'store_true')
-    parser.add_argument('-o',  '--list_owner', help = str_list,    action = 'store_true')
-    parser.add_argument('-t',  '--list_time',  help = str_list,    action = 'store_true')
-    parser.add_argument('-r',  '--restore',    help = str_restore, action = 'store_true')
-    parser.add_argument('-d',  '--remove',     help = str_remove,  action = 'store_true')
-    parser.add_argument('-j',  '--append',     help = str_append,  action = 'store_true')
-    parser.add_argument('-c',  '--clear',      help = str_clear,   action = 'store_true')
+    parser_list = subparsers.add_parser('list', help=str_list)
+    parser_list.set_defaults(func=list_backup)
+    parser_list.add_argument('-i',  '--list_info',  help = str_list_info,   action = 'store_true')
+    parser_list.add_argument('-p',  '--list_path',  help = str_list_path,   action = 'store_true')
+    parser_list.add_argument('-o',  '--list_owner', help = str_list_owner,  action = 'store_true')
+    parser_list.add_argument('-t',  '--list_time',  help = str_list_time,   action = 'store_true')
 
-    parser.add_argument('file', nargs = '*', help = str_file)
+    parser_add = subparsers.add_parser('add', help=str_add)
+    parser_add.set_defaults(func=add_backup)
+    parser_add.add_argument('-a',   '--append',     help = str_append,  action = 'store_true')
+    parser_add.add_argument('-m',   '--message',    help = str_message,  type=str, nargs=1)
+    parser_add.add_argument('file', nargs = '+',    help = str_file)
+
+    parser_restore = subparsers.add_parser('restore', help=str_restore)
+    parser_restore.set_defaults(func=restore_backup)
+    parser_restore.add_argument('name', nargs = 1,  help = str_name, type=str)
+
+    parser_remove = subparsers.add_parser('remove', help=str_remove)
+    parser_remove.set_defaults(func=remove_backup)
+    parser_remove.add_argument('name', nargs = 1,  help = str_name, type=str)
+
+    parser_clear = subparsers.add_parser('clear', help=str_clear)
+    parser_clear.set_defaults(func=clear_backups)
+
     args = parser.parse_args()
+    args.func(args)
 
-    list_info = [args.list, args.list_info, args.list_path, args.list_owner, args.list_time]
-
-
-    if list_info[0]:
-        list_backups(list_info)
-        exit()
-    elif 1 in list_info:
-        print('bckp: cannot use parameters a, p, o, d without l')
-        exit()
-    elif args.clear:
-        call('rm -r /etc/backup/*', shell = True)
-        exit()
+    '''
     elif len(args.file) > 0:
         for n in range(len(args.file)):
             file = args.file[n]
             if file[-1] == '/':
                 file = file[:-1]
+            path_file = os.path.abspath(file)
 
-            if exist_file(file, args.restore):
-                if args.restore:
-                    restore_f_backup(file)
-                    if args.remove:
-                        call('rm /etc/backup/' + file, shell = True)
-                else:
-                    create_f_backup(file, args.append)
-                    if args.remove:
-                        call('rm ' + file, shell = True)
+            if not (path_file in conf['PATHS'].keys()):
+                create_backup_dir(path_file, conf['CONFIG']['namespace'])
 
-            elif exist_dir(file, args.restore):
-                if args.restore:
-                    restore_d_backup(file)
-                    if args.remove:
-                        call('rm -R /etc/backup/' + file, shell = True)
-                else:
-                    create_d_backup(file, args.append)
-                    if args.remove:
-                        call('rm -R ' + file, shell = True)
+            create_backup(args.append, alias_of_path(path_file))
 
             else:
                 print('bckp: cannot stat ' + file + ': No such file or directory')
     else:
         print('bckp: missing file operand')
-
+'''
 else:
     print('bckp: cannot create backup for the file: Permission denied')
